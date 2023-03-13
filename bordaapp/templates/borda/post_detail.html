@@ -1,0 +1,154 @@
+{% extends "borda/base.html" %}
+{% load crispy_forms_tags %}
+{% block content %}
+
+<div class="content-section">
+
+    <!-- Author information -->
+    <div class="media">
+        <img class="d-flex mr-3 rounded-circle article-img" src="{{ post.author.profile.image.url }}" alt="">
+        <div class="media-body">
+            <h4 class="mt-0">Posted by {{ post.author }}</h4>
+            <h6 class="mt-0">{{ post.author.email }}</h6>
+        </div>
+    </div>
+    <hr>
+
+    <!-- Post information -->
+    <div>
+        <h1 class="mt-4">{{post.title}}</h1>
+        <h2>{{post.content}}</h2>
+        <p>
+            Posted on {{ post.date_posted|date:"F d, Y" }}
+        </p>
+    </div>
+    <hr>
+    
+    <!-- Poll Options -->
+    <div id="surveyElement" style="display:inline-block;width:100%;"></div>
+    <div id="surveyResult"></div>
+    <script type="text/javascript">
+        Survey.StylesManager.applyTheme("bootstrap");
+        Survey.defaultBootstrapCss.navigationButton = "btn btn-green";
+
+        function generate_rows(options) {
+            options = options.split(',') //trim options_list
+            option_rows=[]
+            for (opt in options) {
+                row = {
+                    "text" : options[opt],
+                    "value" : options[opt]
+                }
+                option_rows.push(row)
+            }
+            return option_rows
+        }
+
+        var pollTitle = `Please tell us your prefered timing`
+        var options = `{{post.options}}`;
+        var options = generate_rows(options)
+
+        function validateSurvey() {
+            errors = []
+            preferences = document.getElementsByName("preferences")[0]
+            
+            if(preferences && preferences.value && (preferences.value+'').length > 0 ){
+                preferences = preferences.value
+                preferences = (preferences+'').split(',')
+
+                total = 0
+
+                for (pref of preferences) {
+                    val = parseInt(pref)
+                    total += val
+
+                    if (errors.length==0 && (val<0 || val>options.length)){
+                        errors.push("Each option should have points between 0 and " + options.length + "(inclusive).")
+                    }
+                }
+
+                if(total > options.length){
+                    errors.push("Maximum points allowed: " + options.length + " ; Current points: " + total)
+                }
+
+                if(errors.length==0 && total == 0){
+                    errors.push("Assign points to atleast 1 option.")
+                }
+
+            } else {
+                errors.push("Assign points to atleast 1 option.")
+            }
+            
+
+            if(errors.length > 0){
+                alert(errors.join("\n"));
+                return false;
+            }
+
+            return true;
+        }
+
+        var json = {
+            showQuestionNumbers: "off",
+            elements: [
+                {
+                type: "matrixdropdown",
+                name: "postsubmission",
+                title: pollTitle,
+                horizontalScroll: true,
+                // columnMinWidth: "50%",
+                columnMaxWidth: "50%",
+                columns: [
+                    {
+                    name: "points",
+                    title: "Preference Points",
+                    isRequired: true,
+                    cellType: "text",
+                    inputType: "number",
+                    totalType: "sum",
+                    totalFormat: "Total Points: {0}",
+                    validators: [
+                        {
+                            type: "numeric",
+                            minValue: 0,
+                            maxValue: options.length,
+                        }
+                    ]
+                    }
+                ],
+                rows: options
+                }
+            ]
+        };
+
+        window.survey = new Survey.Model(json);
+        survey.onValueChanged.add(function (sender) {
+            postsubmission = JSON.parse(JSON.stringify(sender.data['postsubmission']))
+
+            let preferences=[]
+            for (idx of options) {
+                if(postsubmission[idx.value])
+                    preferences.push(postsubmission[idx.value].points)
+                else
+                    preferences.push(0)
+            }
+            preferences = preferences + ''
+            document.getElementsByName('preferences')[0].innerHTML = preferences;
+            document.getElementsByName('preferences')[0].value = preferences;
+        });
+        survey.showNavigationButtons = false;
+        $("#surveyElement").Survey({model: survey});
+    </script>
+
+    <form method="POST" class="post-form" onsubmit="javascript:return validateSurvey()">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" 
+            id="save-button"
+            class="save btn btn-default">
+            Save
+        </button>
+    </form>
+
+</div>
+{% endblock content %}
